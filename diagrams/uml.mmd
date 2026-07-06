@@ -1,15 +1,47 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
-    %% Keep this file updated so it matches your final implementation.
+    %% PawPal+ class diagram
+    %% Owner has Pets, Pets have Tasks, Scheduler builds a daily plan from Tasks + constraints.
 
-    class ClassName {
-        +type attribute
-        +method() returnType
+    class Owner {
+        +str name
+        +int available_minutes
+        +dict preferences
+        +list~Pet~ pets
+        +add_pet(pet Pet) void
+        +set_preference(key str, value) void
     }
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
+    class Pet {
+        +str name
+        +str species
+        +int age
+        +list~Task~ tasks
+        +add_task(task Task) void
+        +remove_task(task Task) void
+        +get_tasks() list~Task~
     }
 
-    ClassName --> AnotherClass : relationship
+    class Task {
+        +str title
+        +int duration_minutes
+        +str priority
+        +str category
+        +sort_key() tuple
+    }
+
+    class Scheduler {
+        +list~Task~ tasks
+        +int available_minutes
+        +str start_time
+        +list scheduled_items
+        +generate_plan() list
+        -_sort_tasks() list~Task~
+        -_fit_to_budget() list~Task~
+        -_assign_times() list
+        +explain() str
+    }
+
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" Task : has
+    Scheduler "1" --> "*" Task : schedules
+    Scheduler ..> Owner : uses constraints
