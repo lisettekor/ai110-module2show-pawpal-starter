@@ -1,6 +1,7 @@
 classDiagram
     %% PawPal+ class diagram
-    %% Owner has Pets, Pets have Tasks, Scheduler builds a daily plan from Tasks + constraints.
+    %% Owner has Pets, Pets have Tasks, Scheduler builds a daily plan (ScheduledItems)
+    %% from Tasks + constraints and reports overlaps as Conflicts.
 
     class Owner {
         +str name
@@ -9,6 +10,8 @@ classDiagram
         +list~Pet~ pets
         +add_pet(pet Pet) void
         +set_preference(key str, value) void
+        +all_tasks() list~Task~
+        +filter_tasks(pet, completed, category) list~Task~
     }
 
     class Pet {
@@ -29,25 +32,54 @@ classDiagram
         +list~str~ days_of_week
         +bool completed
         +str category
+        +str preferred_time
         +sort_key() tuple
+        +time_key() tuple
         +is_due(day str) bool
         +mark_done() void
+        +next_occurrence() Task
     }
 
     class Scheduler {
         +Owner owner
         +str day
         +str start_time
-        +list scheduled_items
-        +generate_plan() list
+        +list~ScheduledItem~ scheduled_items
+        +list~Task~ dropped
+        +generate_plan() list~ScheduledItem~
         -_active_tasks(tasks list~Task~) list~Task~
         -_sort_tasks(tasks list~Task~) list~Task~
+        +sort_by_time(tasks list~Task~) list~Task~
         -_fit_to_budget(tasks list~Task~) list~Task~
-        -_assign_times(tasks list~Task~) list
+        -_assign_times(tasks list~Task~) list~ScheduledItem~
+        +complete_task(task Task) Task
+        -_owning_pet(task Task) Pet
+        +detect_conflicts() list~Conflict~
+        +check_conflicts() str
         +explain() str
+    }
+
+    class ScheduledItem {
+        +Task task
+        +str start_time
+        +str end_time
+    }
+
+    class Conflict {
+        +ScheduledItem first
+        +ScheduledItem second
+        +Pet first_pet
+        +Pet second_pet
+        +same_pet() bool
+        +scope() str
     }
 
     Owner "1" --> "*" Pet : owns
     Pet "1" --> "*" Task : has
     Scheduler "1" --> "1" Owner : plans for
     Scheduler ..> Task : schedules
+    Scheduler "1" --> "*" ScheduledItem : produces
+    Scheduler ..> Conflict : reports
+    ScheduledItem "1" --> "1" Task : wraps
+    Conflict "1" --> "2" ScheduledItem : compares
+    Conflict ..> Pet : attributes to

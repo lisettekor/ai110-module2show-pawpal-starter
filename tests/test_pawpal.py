@@ -93,6 +93,30 @@ def test_sort_by_time_orders_pinned_first_then_untimed():
     assert [t.description for t in ordered] == ["Walk", "Meds", "Play"]
 
 
+def test_generated_plan_items_are_in_chronological_order():
+    """Sorting correctness: the finished plan's items run in clock order.
+
+    Tasks are added out of order (a late pinned task first), but every
+    ScheduledItem's start_time must be >= the one before it.
+    """
+    owner = Owner("Jordan", available_minutes=240)
+    pet = Pet("Biscuit", "dog")
+    pet.add_task(Task("Evening meds", 10, preferred_time="18:00"))
+    pet.add_task(Task("Morning walk", 30, preferred_time="07:00"))
+    pet.add_task(Task("Midday play", 15, preferred_time="12:00"))
+    owner.add_pet(pet)
+    scheduler = Scheduler(owner, day="Mon", start_time="07:00")
+
+    items = scheduler.generate_plan()
+    starts = [item.start_time for item in items]
+    assert starts == sorted(starts)
+    assert [i.task.description for i in items] == [
+        "Morning walk",
+        "Midday play",
+        "Evening meds",
+    ]
+
+
 # --- Conflict detection -----------------------------------------------------
 
 
@@ -108,6 +132,25 @@ def test_two_pinned_tasks_overlapping_is_a_conflict():
     scheduler.generate_plan()
     conflicts = scheduler.detect_conflicts()
     assert len(conflicts) == 1
+
+
+def test_two_tasks_at_the_exact_same_time_conflict():
+    """Conflict detection: identical start times are flagged as a clash.
+
+    Two tasks pinned to the very same clock time (a true duplicate booking)
+    produce exactly one conflict whose windows share a start_time.
+    """
+    owner = Owner("Jordan", available_minutes=120)
+    pet = Pet("Biscuit", "dog")
+    pet.add_task(Task("Meds", 15, priority="high", preferred_time="08:00"))
+    pet.add_task(Task("Feeding", 10, priority="high", preferred_time="08:00"))
+    owner.add_pet(pet)
+    scheduler = Scheduler(owner, day="Mon", start_time="08:00")
+    scheduler.generate_plan()
+
+    conflicts = scheduler.detect_conflicts()
+    assert len(conflicts) == 1
+    assert conflicts[0].first.start_time == conflicts[0].second.start_time == "08:00"
 
 
 def test_same_pet_conflict_is_flagged_as_same_pet():
@@ -240,6 +283,32 @@ def test_completing_daily_task_queues_a_new_pending_instance():
     assert queued is not None and queued.completed is False
     assert len(pet.get_tasks()) == 2
     assert owner.filter_tasks(completed=False) == [queued]
+
+
+def test_completing_daily_task_creates_one_due_the_following_day():
+    """Recurrence logic: completing a daily task queues one for the next day.
+
+    Plan Monday, complete the daily task, then confirm the freshly queued
+    instance is pending and due Tuesday (the following day).
+    """
+    owner = Owner("Jordan", available_minutes=120)
+    pet = Pet("Biscuit", "dog")
+    feeding = Task("Feeding", 10, frequency="daily")
+    pet.add_task(feeding)
+    owner.add_pet(pet)
+    scheduler = Scheduler(owner, day="Mon")
+
+    queued = scheduler.complete_task(feeding)
+
+    assert feeding.completed is True
+    assert queued is not None
+    assert queued.completed is False
+    # "The following day": a daily task is due Tuesday (and every day).
+    assert queued.is_due("Tue") is True
+    # And it's the only pending task left for tomorrow's plan.
+    tomorrow = Scheduler(owner, day="Tue")
+    planned = tomorrow.generate_plan()
+    assert [i.task for i in planned] == [queued]
 
 
 def test_completing_non_recurring_task_queues_nothing():

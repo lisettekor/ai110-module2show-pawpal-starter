@@ -44,7 +44,8 @@ This UI is a thin layer over the logic in `pawpal_system.py`:
 - **Pet** holds its own care **Tasks**.
 - **Scheduler** filters tasks to those due today (and not completed),
   sorts them by priority, drops the lowest-priority tasks that don't fit
-  the time budget, and assigns clock times.
+  the time budget, assigns clock times, and flags any overlapping tasks
+  as conflicts.
 """
     )
 
@@ -172,6 +173,21 @@ if st.button("Generate schedule", type="primary"):
         scheduler.generate_plan()
 
         st.markdown(f"### 🗓️ Today's Schedule ({day})")
+
+        # At-a-glance summary of the sorted plan: how many tasks fit, how many
+        # were skipped, and how the time budget was spent.
+        used = sum(i.task.duration_minutes for i in scheduler.scheduled_items)
+        if scheduler.scheduled_items:
+            st.success(
+                f"Planned {len(scheduler.scheduled_items)} task(s) for {day}, "
+                f"using {used} of {owner.available_minutes} min."
+            )
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Scheduled", len(scheduler.scheduled_items))
+        m2.metric("Skipped", len(scheduler.dropped))
+        m3.metric("Minutes used", used)
+        m4.metric("Minutes free", max(0, owner.available_minutes - used))
+
         if scheduler.scheduled_items:
             st.table(
                 [
@@ -189,12 +205,40 @@ if st.button("Generate schedule", type="primary"):
             st.info("Nothing could be scheduled for this day.")
 
         if scheduler.dropped:
-            st.warning("Skipped (ran out of time):")
-            for t in scheduler.dropped:
+            st.warning(f"Skipped {len(scheduler.dropped)} task(s) — ran out of time:")
+            st.table(
+                [
+                    {
+                        "Task": t.description,
+                        "Duration": f"{t.duration_minutes} min",
+                        "Priority": t.priority,
+                    }
+                    for t in scheduler.dropped
+                ]
+            )
+
+        # Surface overlapping time windows using the Scheduler's own conflict
+        # detection. detect_conflicts() gives structured Conflict objects (with
+        # a human-readable `scope` label); check_conflicts() is the never-raises
+        # string version we fall back on if anything goes wrong.
+        conflicts = scheduler.detect_conflicts()
+        if conflicts:
+            st.error(f"⚠️ {len(conflicts)} scheduling conflict(s) detected:")
+            for c in conflicts:
                 st.write(
-                    f"- {t.description} ({t.duration_minutes} min) "
-                    f"[priority: {t.priority}]"
+                    f"- **[{c.scope}]** {c.first.task.description} "
+                    f"({c.first.start_time}–{c.first.end_time}) overlaps "
+                    f"{c.second.task.description} "
+                    f"({c.second.start_time}–{c.second.end_time})"
                 )
+        else:
+            warning = scheduler.check_conflicts()
+            if warning:
+                # Non-empty only if check_conflicts() hit a problem detect_
+                # conflicts() couldn't (e.g. a malformed time); show it plainly.
+                st.warning(warning)
+            else:
+                st.success("No scheduling conflicts.")
 
         with st.expander("Why this plan?"):
             st.code(scheduler.explain(), language="text")

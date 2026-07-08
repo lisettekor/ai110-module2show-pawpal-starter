@@ -62,25 +62,23 @@ _fit_to_budget stops at the first task that doesn't fit rather than skipping it 
 
 ---
 
-## 3. AI Collaboration
+## 3. AI Collaboration  
 
 **a. How you used AI**
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
 
-> _Draft based on this session — rewrite in your own words:_
-
-I used AI mainly to extend and refine the logic layer after the initial design: adding recurrence, filtering, time-based sorting, and conflict detection, then documenting the tradeoffs. The most helpful prompts were **specific and incremental** ("add filtering by pet/status," "detect conflicts across pets," "simplify for readability/performance") rather than "build the whole thing" — each one produced a change small enough for me to actually read and check. Asking "are there algorithms that can be simplified?" was useful because it surfaced a hidden O(n²) I hadn't noticed.
+AI helped improve the logic layer after the basic design was built. It helped add features like repeating tasks, filtering, sorting by time, and checking for conflicts. The prompts that worked best were small and specific, like “add filtering by pet or status” or “make this easier to read.” Those gave me changes I could understand and verify. 
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
 
-> _Draft based on this session — rewrite in your own words:_
+I did not reject any AI suggestions outright. I tested the change by running the code and the full test suite, and only kept the suggestions that actually worked.
 
-Two moments stand out. First, the AI's conflict-warning code used emoji (⚠️/✅), which **crashed the program** on my Windows terminal (cp1252 can't encode them) — ironic for a feature meant to "warn instead of crash." I caught it by actually running main.py, and we replaced the emoji with plain ASCII. Second, when asked to document a tradeoff, the prompt suggested an example ("only checking exact time matches") that **wasn't true of my code** — my detect_conflicts already checks full-duration overlap — so I documented the real tradeoff (the greedy budget cut) instead. I verified suggestions by running the test suite (22 tests) and the demo after every change, rather than trusting that the code was correct because it looked reasonable.
+Throughout the project, I made sure every suggestion worked by running all 22 tests within "test_pawpal.py".
 
 ---
 
@@ -124,22 +122,18 @@ Edge cases I'd test next:
 
 - What part of this project are you most satisfied with?
 
-> _Draft based on this session — rewrite in your own words:_
-
-I'm most satisfied with the clean separation between the data classes (Owner/Pet/Task) and the Scheduler. Because the logic was isolated, I could keep adding features — recurrence, filtering, conflict detection — as small, independently testable methods without the classes tangling together. The generate_plan pipeline (filter → sort → budget → place) stayed readable even as it grew.
+I'm most satisfied with the clean separation between the data classes (Owner/Pet/Task) and the Scheduler. Because the logic was isolated, I could keep adding features (recurrence, filtering, conflict detection) as small, independently testable methods. 
 
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
 
-> _Draft based on this session — rewrite in your own words:_
+1. Owner availability windows, not just a duration budget. Today the owner has available_minutes (a flat total) and a start_time, but no end time or multiple blocks. So you can't express "free 08:00–12:00 and 17:00–20:00." 
 
-I'd make the model **date-aware** instead of using weekday-name strings. Right now "next occurrence" of a daily task can't produce a real calendar date (it would need datetime/timedelta), which limits recurrence. I'd also make the scheduler **resolve** conflicts, not just report them — currently a pinned task is always placed even if it collides, and detect_conflicts only warns after the fact.
+2. Honoring time-based preferences. Owner.preferences exists and the docstring even gives {"no_walks_after": "20:00"} but nothing in generate_plan ever reads it. 
 
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
 
-> _Draft based on this session — rewrite in your own words:_
-
-Separating data from behavior early paid off the most — it's what let the system grow without rewrites. On the AI side, the key lesson was that **running the code is the real check**: the most convincing-looking suggestion (the emoji warning) was the one that crashed, and I only caught it by executing it, not by reading it.
+I learned that small, testable changes are easier to verify than big AI-generated rewrites Keeping the logic modular made this possible.

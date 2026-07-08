@@ -22,6 +22,21 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+The scheduling logic in `pawpal_system.py` implements the following algorithms (see [Smarter Scheduling](#-smarter-scheduling) for details):
+
+- **Priority-based planning** — tasks are sorted highest priority first (ties broken by shorter duration), so the most important care happens even when time is tight.
+- **Time-budget fitting** — greedily keeps the highest-priority tasks that fit the owner's available minutes and drops the rest, so a plan never exceeds the day's time budget.
+- **Sorting by time** — pinned tasks with a fixed `preferred_time` (e.g. meds at `14:00`) are placed in chronological clock order; flexible tasks fill the gaps around them.
+- **Clock-time assignment** — each kept task is given a concrete start/end window, with a running cursor so back-to-back tasks stack cleanly and a long pinned task pushes later ones forward.
+- **Daily & weekly recurrence** — tasks recur `daily`, `weekly` (on chosen days), `weekdays` (Mon–Fri), or `weekends` (Sat/Sun); the scheduler plans only tasks due on the chosen day.
+- **Auto-regeneration on completion** — marking a recurring task complete automatically queues a fresh pending copy on the same pet, so it reappears on its next due day.
+- **Conflict detection** — every pair of scheduled items is checked for overlapping time windows, distinguishing a single pet's double-booking from a clash across two pets.
+- **Conflict warnings** — a non-crashing check produces a plain-text warning (or an empty string when clean) safe to display directly in the UI.
+- **Filtering** — tasks can be narrowed by pet, completion status, and/or category in any combination.
+- **Plan explanation** — the scheduler produces a human-readable summary of what was scheduled, what was skipped, and any conflicts.
+
 ## Getting started
 
 ### Setup
@@ -83,8 +98,21 @@ pytest --cov
 Sample test output:
 
 ```
-# Paste your pytest output here
+$ pytest -q
+.........................                                                [100%]
+25 passed in 0.06s
 ```
+
+### What the tests cover
+
+The suite in `tests/test_pawpal.py` (25 tests) exercises every behavior in the logic layer:
+
+- **Task & Pet basics** — `mark_done()` flips a task's `completed` flag; adding a task grows the pet's task list.
+- **Recurrence rules (`is_due`)** — daily tasks are due every day, weekly tasks only on their listed days, and the `weekdays`/`weekends` shortcuts match the right days; unknown frequencies are never due.
+- **Filtering (`Owner.filter_tasks`)** — narrowing by pet name, by completion status, and by pet + category combined.
+- **Sorting** — `sort_by_time()` puts pinned tasks first in clock order (untimed tasks last), and a full `generate_plan()` emits its items in chronological start-time order.
+- **Conflict detection** — two tasks at the exact same time flag one conflict; overlapping pinned tasks are detected and labeled same-pet vs. cross-pet; back-to-back tasks do **not** conflict; `check_conflicts()` returns `""` when clean, a `WARNING…` string on overlap, and warns instead of crashing on a malformed clock time.
+- **Recurrence regeneration** — `next_occurrence()` returns a fresh pending copy (with an independent `days_of_week` list) for recurring tasks and `None` for one-offs; completing a daily task queues a new pending instance on the same pet, due the following day, while completing a one-off queues nothing.
 
 ## 📐 Smarter Scheduling
 
@@ -129,12 +157,64 @@ Recurrence is handled in three cooperating pieces:
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Launch the app with `streamlit run app.py`, then follow along:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. **Set the owner & day.** Enter the owner's name, the total time available for the day (in minutes), the day being planned, and the start time (`HH:MM`). These become the scheduler's constraints. The owner is kept in session state, so pets and tasks persist as you interact.
+2. **Add one or more pets.** Give each a name, species, and age, then click **Add pet**. Until at least one pet exists, the app prompts you to add one before scheduling tasks.
+3. **Add care tasks to a pet.** Pick which pet the task belongs to, then set its description, duration, priority, and frequency (`daily`, or `weekly` with specific days). Click **Add task** — each pet's current tasks appear in a table below.
+4. **Generate the schedule.** Click **Generate schedule**. The scheduler filters to tasks due on the chosen day (and not completed), **sorts** by priority, drops the lowest-priority tasks that don't fit the time budget, and assigns clock times. Pinned `preferred_time` tasks land on the clock; flexible tasks fill the gaps. The result shows as a start/end timetable with summary metrics (scheduled, skipped, minutes used/free).
+5. **Review conflicts, dropped tasks, and the reasoning.** Overlapping time windows are surfaced as **conflict warnings** (labeled same-pet double-booking vs. cross-pet clash); tasks skipped for lack of time are listed under "Skipped (ran out of time)"; and the **"Why this plan?"** expander shows the scheduler's full text explanation.
+6. **Start over.** Click **Start over (clear owner & pets)** to reset the session and begin fresh.
+
+### Example workflow
+
+A concrete run — owner *Jordan* with 90 minutes, planning **Mon**:
+
+1. Add pet **Biscuit** (dog), then add **Mochi** (cat).
+2. Give Biscuit a `high`-priority *Vet call* pinned to `08:00` and a *Morning walk*; give Mochi some *Meds* also pinned to `08:00`.
+3. Click **Generate schedule** → the timetable fills from `08:00`, the two `08:00` tasks raise a **cross-pet conflict warning**, and the lowest-priority task that doesn't fit the 90-minute budget is dropped.
+4. Open **"Why this plan?"** to see the scheduled tasks, the skipped one, and the conflict spelled out.
+
+### Sample CLI output (`python main.py`)
+
+The same logic layer can be driven headless via `main.py`, which prints the sorting, filtering, schedule, and conflict-warning demos:
+
+```text
+================================================
+PawPal+ demo — owner: Jordan
+Pets: Biscuit, Mochi
+Time available today: 90 min
+================================================
+
+Same tasks after Scheduler.sort_by_time()
+------------------------------------------------
+  [08:00] Vet call
+  [08:00] Meds
+  [(flexible)] Morning walk
+  [(flexible)] Training
+  ...
+
+Filtering demo — Owner.filter_tasks()
+------------------------------------------------
+Done (completed=True):     ['Feeding']
+Mochi's tasks (pet='Mochi'): ['Clean litter', 'Feeding', 'Meds', 'Weekly brush']
+
+Today's Schedule
+------------------------------------------------
+Plan for Jordan (Mon):
+  08:00–08:10  Meds (10 min) [priority: high]
+  08:00–08:20  Vet call (20 min) [priority: high]
+  08:20–08:25  Feeding (5 min) [priority: high]
+  08:25–08:55  Morning walk (30 min) [priority: high]
+  08:55–09:05  Clean litter (10 min) [priority: medium]
+Skipped (ran out of time):
+  - Training (20 min) [priority: medium]
+Conflicts (overlapping times):
+  - [Mochi vs Biscuit] Meds (08:00–08:10) overlaps Vet call (08:00–08:20)
+
+Conflict warning
+------------------------------------------------
+WARNING: 1 scheduling conflict: Meds (08:00) overlaps Vet call (08:00) [Mochi vs Biscuit]
+```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
