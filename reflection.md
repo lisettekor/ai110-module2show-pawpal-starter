@@ -44,6 +44,15 @@ I cut recurrence to keep v1 simple, then added it back as frequency once I reali
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
 
+My scheduler considers four constraints, applied as a pipeline in generate_plan:
+
+1. **Due day + completion status** (is_due, completed) — decides which tasks are even candidates today. A task is skipped if it isn't due on the planned day (daily / weekly / weekdays / weekends) or is already done.
+2. **Priority** (high/medium/low, with duration as a tie-breaker) — decides the order tasks are considered in.
+3. **Time budget** (available_minutes) — the hard cap on how much fits.
+4. **Fixed clock time** (preferred_time) — pins certain tasks (e.g. meds at 08:00) to an exact time instead of letting them float.
+
+I treated the **time budget as the hard constraint** because it maps to something real — the owner only has so many hours — so it's the gate that decides how much gets done. **Priority** is the next most important, because when time runs short the whole point is to sacrifice the least-important tasks first. Due-day and completion come *before* both of those (they decide candidacy), and duration is only a tie-breaker within a priority level.
+
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
@@ -60,10 +69,18 @@ _fit_to_budget stops at the first task that doesn't fit rather than skipping it 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
 
+> _Draft based on this session — rewrite in your own words:_
+
+I used AI mainly to extend and refine the logic layer after the initial design: adding recurrence, filtering, time-based sorting, and conflict detection, then documenting the tradeoffs. The most helpful prompts were **specific and incremental** ("add filtering by pet/status," "detect conflicts across pets," "simplify for readability/performance") rather than "build the whole thing" — each one produced a change small enough for me to actually read and check. Asking "are there algorithms that can be simplified?" was useful because it surfaced a hidden O(n²) I hadn't noticed.
+
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
+
+> _Draft based on this session — rewrite in your own words:_
+
+Two moments stand out. First, the AI's conflict-warning code used emoji (⚠️/✅), which **crashed the program** on my Windows terminal (cp1252 can't encode them) — ironic for a feature meant to "warn instead of crash." I caught it by actually running main.py, and we replaced the emoji with plain ASCII. Second, when asked to document a tradeoff, the prompt suggested an example ("only checking exact time matches") that **wasn't true of my code** — my detect_conflicts already checks full-duration overlap — so I documented the real tradeoff (the greedy budget cut) instead. I verified suggestions by running the test suite (22 tests) and the demo after every change, rather than trusting that the code was correct because it looked reasonable.
 
 ---
 
@@ -74,10 +91,30 @@ _fit_to_budget stops at the first task that doesn't fit rather than skipping it 
 - What behaviors did you test?
 - Why were these tests important?
 
+I have 22 tests in tests/test_pawpal.py covering the logic layer:
+
+- **Task basics** — marking a task done flips its status; adding a task grows the pet's list.
+- **Recurrence (is_due)** — daily is due every day, weekly only on listed days, weekdays/weekends match the right group, and an unknown frequency is never due.
+- **Filtering (filter_tasks)** — by pet name, by completion status, and the two combined.
+- **Sorting by time (sort_by_time)** — pinned tasks come out in clock order and untimed tasks fall to the back.
+- **Conflict detection** — a same-pet double-booking is flagged as same_pet, a clash across two pets is flagged as cross-pet, and back-to-back tasks don't count as a conflict.
+- **Lightweight warning (check_conflicts)** — returns an empty string when clean, a warning message on an overlap, and — importantly — a warning *instead of crashing* when a clock time is malformed.
+- **Recurrence regeneration** — completing a daily task auto-queues a fresh pending copy; a non-recurring task queues nothing.
+
+These mattered because the scheduler is a pipeline where each stage feeds the next (filter → sort → budget → place), so a bug in one stage silently corrupts the plan. Testing each rule in isolation makes it obvious *which* stage broke.
+
 **b. Confidence**
 
 - How confident are you that your scheduler works correctly?
 - What edge cases would you test next if you had more time?
+
+I'm fairly confident in the core pipeline — the happy path and the main rules are all covered, and the demo in main.py exercises them end to end. The conflict-detection and recurrence features are the newest, so those are where I'd want more coverage.
+
+Edge cases I'd test next:
+- **Budget of exactly 0**, and a single task longer than the whole budget (nothing should schedule).
+- **A pinned preferred_time that falls before start_time**, or two flexible tasks whose stacking pushes past midnight.
+- **Real date-based recurrence** — right now "next occurrence" reuses the same weekday model rather than an actual calendar date (timedelta), so a daily task's "next day" isn't a true date yet.
+- **A task belonging to no pet** passed to complete_task (currently marked done but silently not re-queued).
 
 ---
 
@@ -87,10 +124,22 @@ _fit_to_budget stops at the first task that doesn't fit rather than skipping it 
 
 - What part of this project are you most satisfied with?
 
+> _Draft based on this session — rewrite in your own words:_
+
+I'm most satisfied with the clean separation between the data classes (Owner/Pet/Task) and the Scheduler. Because the logic was isolated, I could keep adding features — recurrence, filtering, conflict detection — as small, independently testable methods without the classes tangling together. The generate_plan pipeline (filter → sort → budget → place) stayed readable even as it grew.
+
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
 
+> _Draft based on this session — rewrite in your own words:_
+
+I'd make the model **date-aware** instead of using weekday-name strings. Right now "next occurrence" of a daily task can't produce a real calendar date (it would need datetime/timedelta), which limits recurrence. I'd also make the scheduler **resolve** conflicts, not just report them — currently a pinned task is always placed even if it collides, and detect_conflicts only warns after the fact.
+
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+
+> _Draft based on this session — rewrite in your own words:_
+
+Separating data from behavior early paid off the most — it's what let the system grow without rewrites. On the AI side, the key lesson was that **running the code is the real check**: the most convincing-looking suggestion (the emoji warning) was the one that crashed, and I only caught it by executing it, not by reading it.

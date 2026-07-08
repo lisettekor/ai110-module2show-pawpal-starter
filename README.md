@@ -88,14 +88,44 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+Beyond the basic "sort by priority and fill the time budget" plan, PawPal+ implements four smarter scheduling behaviors. All of them live in the logic layer (`pawpal_system.py`) so they can be tested without the UI.
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Feature | Implementing method(s) | What it does |
+|---------|------------------------|--------------|
+| **Sorting by time** | `Scheduler.sort_by_time()` → `Task.time_key()` | Orders tasks by fixed clock time |
+| **Filtering** | `Owner.filter_tasks()` | Narrows tasks by pet, completion status, or category |
+| **Conflict detection** | `Scheduler.detect_conflicts()`, `Scheduler.check_conflicts()`, `Conflict` | Finds overlapping time windows (same-pet vs. cross-pet) |
+| **Recurring tasks** | `Task.is_due()`, `Task.next_occurrence()`, `Scheduler.complete_task()` | Decides due days and regenerates tasks on completion |
+
+### Sorting behavior
+
+`Scheduler.sort_by_time(tasks)` returns tasks in clock order by delegating to `Task.time_key()`. Tasks with a fixed `preferred_time` (e.g. meds at `"08:00"`) sort first in ascending time order; untimed ("flexible") tasks fall to the back. Because Python's `sorted` is stable, flexible tasks keep whatever order the caller gave them (e.g. priority order), so pinned appointments land on the clock and everything else fills the gaps around them.
+
+### Filtering behavior
+
+`Owner.filter_tasks(*, pet=None, completed=None, category=None)` returns the owner's tasks narrowed by any combination of keyword filters:
+
+```python
+owner.filter_tasks(completed=False)               # only pending tasks
+owner.filter_tasks(pet="Mochi")                    # only Mochi's tasks
+owner.filter_tasks(pet="Mochi", completed=False)   # both filters combined
+```
+
+Passing `None` for a filter means "don't filter on this," so the filters compose cleanly. `pet` accepts either a `Pet` object or a name string.
+
+### Conflict detection logic
+
+`Scheduler.detect_conflicts()` compares every pair of scheduled items and returns a list of `Conflict` objects for any whose clock windows overlap — using a true interval-overlap test (`a_start < b_end and b_start < a_end`), not just exact start-time matches. Each `Conflict` records the owning pet of both tasks, so its `same_pet` property distinguishes a single pet's double-booking from a clash across two pets, and its `scope` property produces the human-readable label (e.g. `"Mochi vs Biscuit"`).
+
+`Scheduler.check_conflicts()` is a lightweight companion that returns a plain warning **string** (empty when clean) instead of structured data, and is wrapped so a malformed clock time can never crash the caller — it degrades to a `"WARNING: could not check for conflicts…"` message.
+
+### Recurring task logic
+
+Recurrence is handled in three cooperating pieces:
+
+- `Task.is_due(day)` decides whether a task should happen on a given day, supporting `"daily"`, `"weekly"` (via `days_of_week`), `"weekdays"` (Mon–Fri), and `"weekends"` (Sat/Sun). Unknown frequencies are treated as never due.
+- `Task.next_occurrence()` builds a fresh, uncompleted copy of a recurring task (with an independent `days_of_week` list) for its next run, or returns `None` for a one-off task.
+- `Scheduler.complete_task(task)` ties them together: it marks the task done and, if it recurs, auto-queues the new instance onto the same pet so the task reappears on its next due day.
 
 ## 📸 Demo Walkthrough
 
