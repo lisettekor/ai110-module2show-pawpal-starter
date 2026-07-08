@@ -53,6 +53,20 @@ Paste a sample of your app's CLI or Streamlit output here so a reader can see wh
 #   09:00 — Feeding (10 min) [priority: high]
 #   ...
 ```
+================================================
+PawPal+ demo — owner: Jordan
+Pets: Biscuit, Mochi
+Time available today: 90 min
+================================================
+
+Today's Schedule
+------------------------------------------------
+Plan for Jordan (Mon):
+  08:00–08:05  Feeding (5 min) [priority: high]
+  08:05–08:15  Feeding (10 min) [priority: high]
+  08:15–08:45  Morning walk (30 min) [priority: high]
+  08:45–08:55  Clean litter (10 min) [priority: medium]
+  08:55–09:15  Training (20 min) [priority: medium]
 
 ## 🧪 Testing PawPal+
 
