@@ -22,26 +22,32 @@ classDiagram
     }
 
     class Task {
-        +str title
+        +str description
         +int duration_minutes
         +str priority
+        +str frequency
+        +list~str~ days_of_week
+        +bool completed
         +str category
         +sort_key() tuple
+        +is_due(day str) bool
+        +mark_done() void
     }
 
     class Scheduler {
-        +list~Task~ tasks
-        +int available_minutes
+        +Owner owner
+        +str day
         +str start_time
         +list scheduled_items
         +generate_plan() list
-        -_sort_tasks() list~Task~
-        -_fit_to_budget() list~Task~
-        -_assign_times() list
+        -_active_tasks(tasks list~Task~) list~Task~
+        -_sort_tasks(tasks list~Task~) list~Task~
+        -_fit_to_budget(tasks list~Task~) list~Task~
+        -_assign_times(tasks list~Task~) list
         +explain() str
     }
 
     Owner "1" --> "*" Pet : owns
     Pet "1" --> "*" Task : has
-    Scheduler "1" --> "*" Task : schedules
-    Scheduler ..> Owner : uses constraints
+    Scheduler "1" --> "1" Owner : plans for
+    Scheduler ..> Task : schedules
