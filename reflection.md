@@ -78,7 +78,7 @@ AI helped improve the logic layer after the basic design was built. It helped ad
 
 I did not reject any AI suggestions outright. I tested the change by running the code and the full test suite, and only kept the suggestions that actually worked.
 
-Throughout the project, I made sure every suggestion worked by running all 22 tests within "test_pawpal.py".
+Throughout the project, I made sure every suggestion worked by running all 25 tests within "test_pawpal.py".
 
 ---
 
@@ -89,7 +89,7 @@ Throughout the project, I made sure every suggestion worked by running all 22 te
 - What behaviors did you test?
 - Why were these tests important?
 
-I have 22 tests in tests/test_pawpal.py covering the logic layer:
+I have 25 tests in tests/test_pawpal.py covering the logic layer:
 
 - **Task basics** — marking a task done flips its status; adding a task grows the pet's list.
 - **Recurrence (is_due)** — daily is due every day, weekly only on listed days, weekdays/weekends match the right group, and an unknown frequency is never due.
